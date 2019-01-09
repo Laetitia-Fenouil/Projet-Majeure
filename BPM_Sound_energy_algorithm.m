@@ -1,14 +1,21 @@
 clear all; close all; clc;
 
-%% Récupère une musique et son path
+%% Rï¿½cupï¿½re une musique et son path
 [file,path] = uigetfile({'*.mp3';'*.m4a';'*.wav';'*.wma'});
 
 %% Lecture de la musique
-[y_stereo,Fs] = audioread(strcat(path,file)); % y=musique échantillonnée, Fs = fréquence d'échantillonnage
+[y_stereo,Fs] = audioread(strcat(path,file)); % y=musique ï¿½chantillonnï¿½e, Fs = frï¿½quence d'ï¿½chantillonnage
+
+%% Filtrage du morceau
+order = 6;
+fc = 400;
+[b, a] = butter(order,fc/(Fs/2));
+% Apply the Butterworth filter.
+y_stereo_filtre = filter(b, a, y_stereo);
 
 %% Implement beat detection as described in Marco Ziccardi's article "Beat Detection Algorithms (Part 1)" (05/28/2015)
 %  First method : Sound energy algorithm
-[L,C] = size(y_stereo);
+[L,C] = size(y_stereo_filtre);
 % Number of blocks of 1024 samples
 NSamples = 1024;
 NBlocks = (L-mod(L,NSamples))/NSamples;
@@ -17,7 +24,7 @@ EBlocks = zeros(NBlocks,1); %%Energy of each block
 % For each block, compute the mean energy
 for i=1:NBlocks
     range = [1+(i-1)*NSamples:i*NSamples];
-    EBlocks(i,:) = sum(y_stereo(range,1).^2 + y_stereo(range,2).^2);
+    EBlocks(i,:) = sum(y_stereo_filtre(range,1).^2 + y_stereo_filtre(range,2).^2);
 end
 
 Beats = zeros(NBlocks,1);
@@ -35,43 +42,60 @@ for i=1:NBlocks
     % Compute the C factor for which a beat is detected (if E>C?mean(E))
     C = -0.0000015*var(EW)+1.5142857;
     if(EBlocks(i) > C*mean(EW))
-       Beats(i) = 1; 
+       Beats(i) = mean(EW); 
     else
         Beats(i) = 0;
     end
 end
+T = NSamples*[0:NBlocks-1]/Fs;
+plot(T, Beats)
 
 %% FIN DE L'ALGO
 
-%% Tentative de mise en forme des résultats
-% dérive le beat pour ne pas garder plusieurs valeurs pour un même beat
-dBdt = diff(Beats);
-% Prend les indice de début et fin de beat
-indBegin = find(dBdt == 1);
-indEnd = find(dBdt == -1);
-% Garde le temps moyen du beat
-Times = [];
-BeatsMean = zeros(size(Beats));
-T = NSamples*[0:NBlocks-1]/Fs;
-for i = 1:length(indEnd)
-    ind = ceil(indBegin(i) + 1 + (indEnd(i) - indBegin(i))/2);
-    Times(i) = T(ind);
-    BeatsMean(ind) = 1;
-end
-% Plot + calcul du BPM
-stem(T,BeatsMean);
-BPM = 60*sum(BeatsMean)/T(NBlocks-1)
-
-
-%% Sortie d'un gif animé
-videoFWriter = vision.VideoFileWriter
-
-
-%% Résultats
-% Semble peu précis et détecte des beats qui ne n'en sont pas
-% Exemples de limites trouvées :
-% Chansons où les battements ne sont pas forts (I Will Always Love You - Dolly Parton)
-% Chansons électroniques (test avec tout l'album Discovery de Daft Punk, BPM
-% supérieur à celui trouvé sur internet)
-% Chanson où ça ne marche pas trop mal : Into You - Ariana Grande (Couplets
+% %% Tentative de mise en forme des rï¿½sultats
+% % dï¿½rive le beat pour ne pas garder plusieurs valeurs pour un mï¿½me beat
+% dBdt = diff(Beats);
+% % Prend les indice de dï¿½but et fin de beat
+% indBegin = find(dBdt > 0);
+% indEnd = find(dBdt < 0);
+% % Garde le temps moyen du beat
+% Times = [];
+% MeanDetectedAmp = mean(Beats(find(Beats ~= 0)));
+% BeatsMean = zeros(size(Beats));
+% BeatsThresh = zeros(size(Beats));
+% BeatsMeanThresh = zeros(size(Beats));
+% T = NSamples*[0:NBlocks-1]/Fs;
+% for i = 1:length(indEnd)
+%     ind = ceil(indBegin(i) + 1 + (indEnd(i) - indBegin(i))/2);
+%     Times(i) = T(ind);
+%     BeatsMean(ind) = Beats(ind);
+%     if(BeatsMean(ind) > 0.75*MeanDetectedAmp)
+%         BeatsThresh(indBegin(i):indEnd(i)) = Beats(indBegin(i):indEnd(i));
+%         BeatsMeanThresh(ind) = BeatsMean(ind);
+%     end
+% end
+% % Plot + calcul du BPM
+% subplot(211)
+% stem(T, BeatsMean);
+% BPM = 60*sum(BeatsMean)/T(NBlocks-1)
+% 
+% subplot(212)
+% stem(T, BeatsMeanThresh);
+%% Rï¿½sultats
+% Semble peu prï¿½cis et dï¿½tecte des beats qui ne n'en sont pas
+% Exemples de limites trouvï¿½es :
+% Chansons oï¿½ les battements ne sont pas forts (I Will Always Love You - Dolly Parton)
+% Chansons ï¿½lectroniques (test avec tout l'album Discovery de Daft Punk, BPM
+% supï¿½rieur ï¿½ celui trouvï¿½ sur internet)
+% Chanson oï¿½ ï¿½a ne marche pas trop mal : Into You - Ariana Grande (Couplets
 % principalement)
+
+ind = find(Beats ~= 0);
+audioBeat = zeros(size(y_stereo));
+for i=1:length(ind)
+    range = [1+(ind(i)-1)*NSamples:ind(i)*NSamples];
+    audioBeat(range,:) = y_stereo(range,:);
+end
+audiowrite('beat.wav',audioBeat,Fs);
+% 
+% audiowrite('filter.wav',y_stereo_filtre,Fs);
