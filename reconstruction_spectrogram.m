@@ -23,8 +23,12 @@ for i=1:Nit
     [s,f,t] = spectrogram(data,hamming(w),noverlap,nfft, Fs);
     for j=1:length(t)
         sample_reconstruction = zeros(length(f),1);
-        for k=1:3
+        for k=1:30
            [M,I] = max(s(:,j));
+           while(f(I)>20000)
+                s(I,j) = 0;
+                [M, I] = max(s(:,j));
+            end
            sample_reconstruction(I) = M;
            s(I,j) = min(s(:,j));
         end
@@ -33,4 +37,3 @@ for i=1:Nit
 end
 
 audiowrite('song.wav',reconstruction,Fs);
-%mauvais résultats, surement mal reconstruit
