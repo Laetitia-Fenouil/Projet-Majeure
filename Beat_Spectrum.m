@@ -1,4 +1,4 @@
-function [T, B, BPM] = Beat_Spectrum(y,Fs,T_data)
+function [T, B, BPM, D] = Beat_Spectrum(y,Fs,T_data,Beats)
 
 %% Implement beat detection as described in Jonathan Foote's and Shingo Uchihashi's article "THE BEAT SPECTRUM: A NEW APPROACH TO RHYTHM ANALYSIS" (2001)
 % 1 Audio parameterization
@@ -10,7 +10,7 @@ nov = w/2;
 ind = 1;
 windowed_data = [];
 while((ind+1)*nov<length(data))
-    windowed_data(:,ind) = 10*log(abs(fft(data((ind-1)*nov+1:(ind+1)*nov))));
+    windowed_data(:,ind) = 10*log(abs(fft(data((ind-1)*nov+1:(ind+1)*nov)))); %10*log(abs(...)) = magnitude du spectre
     ind = ind + 1;
 end
 Nw = length(windowed_data(1,:));
@@ -42,11 +42,21 @@ B_lisse = movmean(movmean(B,floor(length(B)/50)), 10);
 [peaks, locs] = findpeaks(B);
 [peaks, locs_l] = findpeaks(B_lisse);
 
-[m, I1] = min(abs(locs - locs_l(1)));
-[m, I2] = min(abs(locs - locs_l(2)));
-BPM1 = 60/T(locs(I1));
-BPM2 = 60/T(locs(I2));
-
+if isempty(locs_l)
+    BPM1 = 0;
+    BPM2 = 0;
+else
+    if length(locs_l)==1
+        [m, I1] = min(abs(locs - locs_l(1)));
+        BPM1 = 60/T(locs(I1));
+        BPM2 = 0;
+    else
+        [m, I1] = min(abs(locs - locs_l(1)));
+        [m, I2] = min(abs(locs - locs_l(2)));
+        BPM1 = 60/T(locs(I1));
+        BPM2 = 60/T(locs(I2));
+    end
+end
 %% Choix du BPM
 %% 
 if(BPM1 > 220)
@@ -58,6 +68,17 @@ elseif(BPM2 > 220)
 elseif(BPM1 < 60)
     BPM = BPM1;
 else
-    BPM = BPM2;
+    if(isempty(Beats))
+        BPM = BPM2;
+    else
+        mean_B = mean(Beats);
+        diff1 = abs(mean_B - BPM1);
+        diff2 = abs(mean_B - BPM2);
+        if min(diff1,diff2) == diff1
+            BPM = BPM1;
+        else
+            BPM = BPM2;
+        end
+    end
 end
 end
